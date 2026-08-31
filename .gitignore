@@ -1,0 +1,12 @@
+/target
+
+# Private per household/clone — not meant to be shared or checked in
+config.toml
+
+# Receipt data (sensitive: exactly what and when someone bought) + the
+# generated report (it bakes all receipt data in as JSON in the page).
+# categories.toml is a shareable template (just category rules, no personal
+# data) — keep that one.
+data/*
+!data/categories.toml
+out/

@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kvittokartan</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0d0a;
+    --panel: #12150f;
+    --panel-2: #171b13;
+    --border: #23281d;
+    --text: #eef1e8;
+    --text-dim: #8b9382;
+    --accent: #c9f24a;
+    --accent-dim: #7c9a3a;
+    --danger: #e8748a;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(201,242,74,0.06), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 28px 36px 72px;
+  }
+  .topbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .year-label {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+  #year-select {
+    font-weight: 600;
+    border-color: var(--accent-dim);
+  }
+  select, button {
+    font-family: inherit;
+    font-size: 0.82rem;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--accent-dim); }
+  button.primary {
+    background: var(--accent);
+    color: #10130c;
+    border-color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 8px 20px -8px rgba(201,242,74,0.45);
+  }
+  button.primary:hover { filter: brightness(1.05); }
+  button, select { box-shadow: 0 2px 6px -2px rgba(0,0,0,0.5); }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  h1 { font-size: 1.7rem; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { color: var(--text-dim); font-size: 0.88rem; margin: 0 0 22px; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-tile {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      0 14px 28px -18px rgba(0,0,0,0.7);
+  }
+  .stat-tile .value { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.01em; }
+  .stat-tile .label {
+    color: var(--text-dim); font-size: 0.76rem; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-top: 4px;
+  }
+
+  .overrides-bar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--accent-dim);
+    border-radius: 999px;
+    padding: 8px 16px;
+    margin-bottom: 20px;
+    font-size: 0.85rem;
+    width: fit-content;
+  }
+  .overrides-bar.visible { display: flex; }
+  .overrides-bar .count { color: var(--accent); font-weight: 600; }
+
+  .sync-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .sync-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+  .sync-tile-row { display: flex; align-items: center; gap: 10px; }
+  .sync-tile .sync-label { font-weight: 600; }
+  .sync-tile .sync-when { color: var(--text-dim); font-size: 0.78rem; }
+  .sync-tile .sync-status { color: var(--accent); font-size: 0.78rem; flex: 1; min-width: 0; }
+  .sync-tile .sync-status.error { color: var(--danger); }
+  .sync-qr {
+    display: none;
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    width: fit-content;
+  }
+  .sync-qr.visible { display: block; }
+  .sync-qr p { margin: 0 0 6px; color: #222; font-size: 0.72rem; text-align: center; max-width: 160px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.7fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 14px 8px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      0 24px 48px -28px rgba(0,0,0,0.75);
+  }
+  .panel-stack { display: flex; flex-direction: column; gap: 16px; }
+  .panel h2 {
+    font-size: 0.95rem; font-weight: 600; margin: 2px 8px 4px; color: var(--text);
+  }
+  .panel .hint { color: var(--text-dim); font-size: 0.72rem; margin: -2px 8px 8px; }
+
+  .cat-list { padding: 4px 4px 8px; }
+  .cat-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 8px; border-radius: 10px; cursor: pointer;
+    transition: background 0.12s;
+  }
+  .cat-row:hover { background: var(--panel-2); }
+  .cat-row .name { flex: 0 0 118px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-row .track { flex: 1; height: 2px; background: var(--border); position: relative; border-radius: 2px; }
+  .cat-row .fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--accent-dim); border-radius: 2px; }
+  .cat-row .dot {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    border-radius: 50%; background: var(--accent);
+    box-shadow: 0 3px 8px -2px rgba(0,0,0,0.6), 0 0 10px -2px rgba(201,242,74,0.35);
+  }
+  #pie-chart { filter: drop-shadow(0 18px 30px rgba(0,0,0,0.55)); }
+  .cat-row .pct { flex: 0 0 42px; text-align: right; color: var(--text-dim); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+
+  /* Drill-down overlay */
+  .overlay {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    align-items: center; justify-content: center; z-index: 50;
+    padding: 24px;
+  }
+  .overlay.visible { display: flex; }
+  .drawer {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: min(720px, 100%);
+    max-height: 82vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 40px 80px -24px rgba(0,0,0,0.85);
+  }
+  .drawer-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+  }
+  .drawer-header h3 { margin: 0; font-size: 1.05rem; }
+  .drawer-header .close { background: none; border: none; color: var(--text-dim); font-size: 1.2rem; padding: 4px 8px; }
+  .drawer-body { overflow-y: auto; padding: 6px 10px; }
+  .item-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 8px; border-bottom: 1px solid var(--border);
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-row .iname { flex: 1; font-size: 0.86rem; }
+  .item-row .icount { color: var(--text-dim); font-size: 0.76rem; width: 60px; }
+  .item-row .iamount { width: 90px; text-align: right; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+  .item-row select { padding: 4px 8px; font-size: 0.76rem; width: 148px; }
+  .item-row select.changed { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-right">
+      <label for="period-select" class="year-label">Period</label>
+      <select id="period-select"></select>
+    </div>
+  </div>
+
+  <h1>ICA — inköpsstatistik</h1>
+  <p class="subtitle" id="subtitle"></p>
+
+  <div class="overrides-bar" id="overrides-bar">
+    <span><span class="count" id="overrides-count">0</span> omkategoriserade varor sparade lokalt</span>
+    <button id="export-btn">Exportera JSON</button>
+    <button id="reset-btn">Nollställ</button>
+  </div>
+
+  <div class="sync-row" id="sync-row"></div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Spend per månad, per kategori</h2>
+      <div id="bar-chart" style="width:100%;height:420px;"></div>
+    </div>
+
+    <div class="panel-stack">
+      <div class="panel">
+        <h2>Fördelning per kategori</h2>
+        <p class="hint">Klicka en slice för att se varorna bakom den</p>
+        <div id="pie-chart" style="width:100%;height:280px;"></div>
+      </div>
+      <div class="panel">
+        <h2>Kategorier</h2>
+        <p class="hint">Klicka en rad för att se/ändra varor</p>
+        <div class="cat-list" id="cat-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="drawer">
+      <div class="drawer-header">
+        <h3 id="drawer-title">Kategori</h3>
+        <button class="close" id="drawer-close">✕</button>
+      </div>
+      <div class="drawer-body" id="drawer-body"></div>
+    </div>
+  </div>
+
+<script>
+const RAW = __REPORT_DATA__;
+const ADJUSTMENT_CATEGORIES = new Set(["Pant", "Rabatt"]);
+const STORAGE_KEY = "ica-statistik.category_overrides.v1";
+
+const PALETTE = [
+  "#c9f24a", "#5eb1ef", "#f2a65a", "#e8748a", "#b892e8",
+  "#7fd88f", "#f2d95c", "#6fc9c2", "#e69a5c", "#9aa5f2",
+  "#d3d9e0", "#c97fd8", "#8fd8b0", "#f28c8c",
+];
+
+// --- overrides (localStorage) ---
+function loadOverrides() {
+  try {
+    return new Map(Object.entries(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")));
+  } catch {
+    return new Map();
+  }
+}
+function saveOverrides(map) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
+}
+let overrides = loadOverrides();
+
+// Om sidan servas via `cargo run -- serve` finns /api/overrides på samma
+// origin och skriver rakt till data/category_overrides.json på disk — då
+// slår ändringar igenom automatiskt till nästa `sync`/`categorize`/`report`.
+// Öppnas sidan direkt som fil (file://) misslyckas fetch tyst och vi kör
+// bara vidare på localStorage + manuell export.
+let serverReachable = false;
+
+async function initFromServer() {
+  try {
+    const res = await fetch("/api/overrides", { cache: "no-store" });
+    if (!res.ok) return;
+    serverReachable = true;
+    const serverData = await res.json();
+    overrides = new Map(Object.entries(serverData));
+    saveOverrides(overrides);
+    updateOverridesBar();
+    renderAll();
+    renderSyncRow();
+  } catch {
+    // ingen server — localStorage-only
+  }
+}
+
+// --- live BankID-synk från knapp (kräver att sidan servas, se serve.rs) ---
+function cssId(s) {
+  return s.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+function fmtWhen(unixSeconds) {
+  if (!unixSeconds) return "aldrig synkad";
+  const d = new Date(unixSeconds * 1000);
+  return "senast synkad " + d.toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: "short" });
+}
+
+const syncPollers = new Map();
+
+// Ritar om QR:n i qrBox. BankIDs QR roterar varje sekund — kör detta på
+// varje "pending"-poll som har en (ny) qr_code, inte bara första gången.
+function renderQr(qrBox, qrText) {
+  qrBox.innerHTML = '<p>Skanna med BankID (t.ex. från en annan enhet)</p>';
+  const target = document.createElement("div");
+  qrBox.appendChild(target);
+  new QRCode(target, { text: qrText, width: 160, height: 160 });
+  qrBox.classList.add("visible");
+}
+
+function handleSyncStatus(data, statusEl, btn, qrBox) {
+  statusEl.classList.remove("error");
+  if (data.status === "authenticating") {
+    statusEl.textContent = data.hint || "Väntar på BankID...";
+    if (data.qr_code) renderQr(qrBox, data.qr_code);
+  } else if (data.status === "working") {
+    statusEl.textContent = "Synkar kvitton...";
+    qrBox.classList.remove("visible");
+  } else if (data.status === "done") {
+    statusEl.textContent = `Klart — ${data.newly_fetched} nya kvitton`;
+    qrBox.classList.remove("visible");
+  } else if (data.status === "error") {
+    statusEl.classList.add("error");
+    statusEl.textContent = "Fel: " + data.message;
+    qrBox.classList.remove("visible");
+  }
+}
+
+// En knapp per (profil, källa) — inte en per profil som pollar alla källor
+// i tur och ordning. Klicka "Willys" väntar inte på att ICA också ska
+// hinna igenom sin egen BankID-runda.
+function syncKey(profile, source) {
+  return `${profile}::${source}`;
+}
+
+async function startSync(profile, source, btn, statusEl, qrBox) {
+  btn.disabled = true;
+  statusEl.classList.remove("error");
+  statusEl.textContent = "Startar...";
+  const key = syncKey(profile, source);
+
+  try {
+    const res = await fetch("/api/sync/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile, source }),
+    });
+    const data = await res.json();
+    handleSyncStatus(data, statusEl, btn, qrBox);
+
+    // Funkar bara om enheten som klickade har BankID installerat — annars
+    // är QR-koden i qrBox vägen in (skanna med en annan enhet).
+    if (data.status === "authenticating" && data.autostart_link) {
+      window.location.href = data.autostart_link;
+    }
+
+    if (syncPollers.has(key)) clearInterval(syncPollers.get(key));
+    const poll = setInterval(async () => {
+      const r = await fetch(`/api/sync/status/${encodeURIComponent(profile)}/${encodeURIComponent(source)}`, { cache: "no-store" });
+      const d = await r.json();
+      handleSyncStatus(d, statusEl, btn, qrBox);
+      if (d.status === "done") {
+        clearInterval(poll);
+        syncPollers.delete(key);
+        statusEl.textContent = "Klart! Laddar om...";
+        setTimeout(() => location.reload(), 1200);
+      } else if (d.status === "error") {
+        clearInterval(poll);
+        syncPollers.delete(key);
+        btn.disabled = false;
+      }
+    }, 1500);
+    syncPollers.set(key, poll);
+  } catch {
+    statusEl.classList.add("error");
+    statusEl.textContent = "Kunde inte starta synk.";
+    btn.disabled = false;
+  }
+}
+
+function renderSyncRow() {
+  const container = document.getElementById("sync-row");
+  if (!container) return;
+  container.innerHTML = "";
+  for (const s of RAW.syncs || []) {
+    const tile = document.createElement("div");
+    tile.className = "sync-tile";
+    const canRun = serverReachable && s.implemented;
+    tile.innerHTML = `
+      <div class="sync-tile-row">
+        <span class="sync-label">${s.profile} · ${s.source_label}</span>
+        <span class="sync-when">${s.implemented ? fmtWhen(s.unix_seconds) : "kommer snart"}</span>
+        <span class="sync-status"></span>
+        <button ${canRun ? "" : "disabled"}>Uppdatera</button>
+      </div>
+      <div class="sync-qr"></div>
+    `;
+    const btn = tile.querySelector("button");
+    const statusEl = tile.querySelector(".sync-status");
+    const qrBox = tile.querySelector(".sync-qr");
+    if (canRun) {
+      btn.addEventListener("click", () => startSync(s.profile, s.source, btn, statusEl, qrBox));
+    }
+    container.appendChild(tile);
+  }
+}
+
+// Skickar EN ändring i taget — servern läser-ändrar-skriver bara den nyckeln
+// (se serve.rs), så två personer som omkategoriserar olika varor samtidigt
+// skriver aldrig över varandras ändringar (till skillnad från att posta hela
+// lokala overrides-kartan, som skulle kunna radera den andras senaste ändring
+// om den hunnit skriva efter att du hämtade men innan du sparade).
+function syncOneToServer(key, category) {
+  fetch("/api/overrides/set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, category }),
+  }).catch(() => {});
+}
+
+function effectiveCategory(item) {
+  return overrides.get(item.key) || item.category;
+}
+
+// All kategorier som förekommer i datan (för dropdown-val vid omkategorisering)
+const allCategories = [...new Set(RAW.items.map(i => i.category))]
+  .filter(c => !ADJUSTMENT_CATEGORIES.has(c))
+  .sort();
+
+const colorMap = new Map();
+function colorFor(category) {
+  if (!colorMap.has(category)) colorMap.set(category, PALETTE[colorMap.size % PALETTE.length]);
+  return colorMap.get(category);
+}
+
+function fmtKr(n) {
+  return Math.round(n).toLocaleString("sv-SE") + " kr";
+}
+
+// --- derive rows with live (overridden) category ---
+function liveItems() {
+  return RAW.items.map(i => ({ ...i, category: effectiveCategory(i) }));
+}
+
+const MONTH_NAMES = [
+  "januari", "februari", "mars", "april", "maj", "juni",
+  "juli", "augusti", "september", "oktober", "november", "december",
+];
+function monthLabel(m) {
+  const [y, mo] = m.split("-");
+  return `${MONTH_NAMES[parseInt(mo, 10) - 1]} ${y}`;
+}
+
+const months = [...new Set(RAW.items.map(p => p.month))].sort();
+const years = [...new Set(months.map(m => m.slice(0, 4)))].sort();
+const latestMonth = months[months.length - 1];
+
+const periodSelect = document.getElementById("period-select");
+
+function addOption(select, value, label) {
+  const opt = document.createElement("option");
+  opt.value = value;
+  opt.textContent = label;
+  select.appendChild(opt);
+}
+
+if (latestMonth) addOption(periodSelect, "latest", `Senaste månaden (${monthLabel(latestMonth)})`);
+addOption(periodSelect, "all", "Alla år");
+
+const yearGroup = document.createElement("optgroup");
+yearGroup.label = "Helår";
+years.slice().reverse().forEach(y => addOption(yearGroup, `year:${y}`, y));
+periodSelect.appendChild(yearGroup);
+
+const monthGroup = document.createElement("optgroup");
+monthGroup.label = "Enskild månad";
+months.slice().reverse().forEach(m => addOption(monthGroup, `month:${m}`, monthLabel(m)));
+periodSelect.appendChild(monthGroup);
+
+periodSelect.value = latestMonth ? "latest" : "all";
+
+function filterByPeriod(items) {
+  const period = periodSelect.value;
+  if (period === "all") return items;
+  if (period === "latest") return items.filter(r => r.month === latestMonth);
+  if (period.startsWith("year:")) {
+    const y = period.slice(5);
+    return items.filter(r => r.month.startsWith(y));
+  }
+  if (period.startsWith("month:")) {
+    const m = period.slice(6);
+    return items.filter(r => r.month === m);
+  }
+  return items;
+}
+
+function renderStats(rows) {
+  const spend = rows.filter(r => !ADJUSTMENT_CATEGORIES.has(r.category));
+  const total = spend.reduce((s, r) => s + r.amount, 0);
+  const months = new Set(rows.map(r => r.month));
+  const receipts = new Set(rows.map(r => r.r));
+  const categories = new Set(spend.map(r => r.category));
+  const container = document.getElementById("stat-row");
+  container.innerHTML = "";
+  const tiles = [
+    ["Totalt (varor)", fmtKr(total)],
+    ["Kvitton", receipts.size.toLocaleString("sv-SE")],
+    ["Snitt / månad", months.size ? fmtKr(total / months.size) : "–"],
+    ["Kategorier", categories.size.toLocaleString("sv-SE")],
+  ];
+  for (const [label, value] of tiles) {
+    const tile = document.createElement("div");
+    tile.className = "stat-tile";
+    tile.innerHTML = `<div class="value">${value}</div><div class="label">${label}</div>`;
+    container.appendChild(tile);
+  }
+}
+
+function renderBar(rows) {
+  const months = [...new Set(rows.map(r => r.month))].sort();
+  const cats = [...new Set(rows.map(r => r.category))]
+    .sort((a, b) => (ADJUSTMENT_CATEGORIES.has(a) ? 1 : 0) - (ADJUSTMENT_CATEGORIES.has(b) ? 1 : 0));
+
+  const traces = cats.map(cat => {
+    const byMonth = new Map();
+    for (const r of rows) if (r.category === cat) byMonth.set(r.month, (byMonth.get(r.month) || 0) + r.amount);
+    return {
+      type: "bar",
+      name: cat,
+      x: months,
+      y: months.map(m => byMonth.get(m) || 0),
+      marker: { color: colorFor(cat), cornerradius: 4 },
+    };
+  });
+
+  Plotly.newPlot("bar-chart", traces, {
+    barmode: "relative",
+    paper_bgcolor: "transparent",
+    plot_bgcolor: "transparent",
+    font: { color: "#eef1e8", size: 11 },
+    margin: { t: 6, r: 6, b: 56, l: 46 },
+    legend: { orientation: "h", y: -0.22, font: { size: 10 } },
+    xaxis: { tickangle: -45, gridcolor: "#23281d", zeroline: false },
+    yaxis: { title: "kr", gridcolor: "#23281d", zeroline: false },
+  }, { responsive: true, displayModeBar: false });
+
+  const plotEl = document.getElementById("bar-chart");
+  plotEl.removeAllListeners?.("plotly_click");
+  plotEl.on("plotly_click", ev => {
+    const cat = ev.points?.[0]?.data?.name;
+    if (cat && !ADJUSTMENT_CATEGORIES.has(cat)) openDrawer(cat);
+  });
+}
+
+function categorySpendMap(rows) {
+  const spend = new Map();
+  for (const r of rows) {
+    if (ADJUSTMENT_CATEGORIES.has(r.category)) continue;
+    spend.set(r.category, (spend.get(r.category) || 0) + r.amount);
+  }
+  return spend;
+}
+
+function renderPie(rows) {
+  const spend = categorySpendMap(rows);
+  const entries = [...spend.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+
+  Plotly.newPlot("pie-chart", [{
+    type: "pie",
+    labels: entries.map(e => e[0]),
+    values: entries.map(e => e[1]),
+    marker: { colors: entries.map(e => colorFor(e[0])), line: { color: "#0b0d0a", width: 2 } },
+    hole: 0.55,
+    textinfo: "none",
+    hovertemplate: "%{label}<br>%{value:,.0f} kr (%{percent})<extra></extra>",
+  }], {
+    paper_bgcolor: "transparent",
+    font: { color: "#eef1e8", size: 11 },
+    margin: { t: 6, r: 6, b: 6, l: 6 },
+    showlegend: false,
+  }, { responsive: true, displayModeBar: false });
+
+  const plotEl = document.getElementById("pie-chart");
+  plotEl.removeAllListeners?.("plotly_click");
+  plotEl.on("plotly_click", ev => {
+    const cat = ev.points?.[0]?.label;
+    if (cat) openDrawer(cat);
+  });
+}
+
+function renderCatList(rows) {
+  const spend = categorySpendMap(rows);
+  const entries = [...spend.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, [, v]) => s + v, 0) || 1;
+  const maxV = entries.length ? entries[0][1] : 1;
+
+  const container = document.getElementById("cat-list");
+  container.innerHTML = "";
+  for (const [cat, amount] of entries) {
+    const pct = (amount / total) * 100;
+    const dotSize = 6 + (amount / maxV) * 14;
+    const row = document.createElement("div");
+    row.className = "cat-row";
+    row.innerHTML = `
+      <div class="name">${cat}</div>
+      <div class="track">
+        <div class="fill" style="width:${pct}%"></div>
+        <div class="dot" style="left:${pct}%; width:${dotSize}px; height:${dotSize}px; background:${colorFor(cat)}"></div>
+      </div>
+      <div class="pct">${pct.toFixed(0)}%</div>
+    `;
+    row.addEventListener("click", () => openDrawer(cat));
+    container.appendChild(row);
+  }
+}
+
+// --- drill-down drawer ---
+const overlay = document.getElementById("overlay");
+const drawerTitle = document.getElementById("drawer-title");
+const drawerBody = document.getElementById("drawer-body");
+
+function openDrawer(category) {
+  const rows = filterByPeriod(liveItems()).filter(r => r.category === category);
+
+  // Gruppera per override-nyckel (kedjeprefixad — samma varunamn från olika
+  // kedjor är medvetet SKILDA rader här, se kvitto-core::categorize::override_key)
+  const byKey = new Map();
+  for (const r of rows) {
+    const e = byKey.get(r.key) || { name: r.name, count: 0, total: 0 };
+    e.count += 1;
+    e.total += r.amount;
+    byKey.set(r.key, e);
+  }
+  const grouped = [...byKey.entries()].sort((a, b) => b[1].total - a[1].total);
+
+  drawerTitle.textContent = `${category} · ${grouped.length} varor · ${fmtKr(rows.reduce((s, r) => s + r.amount, 0))}`;
+  drawerBody.innerHTML = "";
+
+  for (const [key, info] of grouped) {
+    const row = document.createElement("div");
+    row.className = "item-row";
+
+    const select = document.createElement("select");
+    for (const c of allCategories) {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      if (c === category) opt.selected = true;
+      select.appendChild(opt);
+    }
+    if (overrides.has(key)) select.classList.add("changed");
+
+    select.addEventListener("change", () => {
+      overrides.set(key, select.value);
+      saveOverrides(overrides);
+      syncOneToServer(key, select.value);
+      select.classList.add("changed");
+      updateOverridesBar();
+      renderAll();
+      openDrawer(category); // re-render listan (varan flyttar snart ut ur denna kategori nästa render)
+    });
+
+    row.innerHTML = `<div class="iname">${info.name}</div><div class="icount">${info.count}x</div><div class="iamount">${fmtKr(info.total)}</div>`;
+    row.appendChild(select);
+    drawerBody.appendChild(row);
+  }
+
+  overlay.classList.add("visible");
+}
+
+document.getElementById("drawer-close").addEventListener("click", () => overlay.classList.remove("visible"));
+overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.remove("visible"); });
+
+// --- overrides toolbar ---
+function updateOverridesBar() {
+  const bar = document.getElementById("overrides-bar");
+  const countEl = document.getElementById("overrides-count");
+  countEl.textContent = overrides.size;
+  bar.classList.toggle("visible", overrides.size > 0);
+}
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  const obj = Object.fromEntries(overrides);
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "category_overrides.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("reset-btn").addEventListener("click", () => {
+  if (!confirm("Ta bort alla omkategoriseringar (lokalt och på servern)?")) return;
+  overrides = new Map();
+  localStorage.removeItem(STORAGE_KEY);
+  fetch("/api/overrides", { method: "DELETE" }).catch(() => {});
+  updateOverridesBar();
+  renderAll();
+});
+
+function periodLabel() {
+  const period = periodSelect.value;
+  if (period === "all") return `alla år (${years[0] || "–"}–${years[years.length - 1] || "–"})`;
+  if (period === "latest") return `senaste månaden (${monthLabel(latestMonth)})`;
+  if (period.startsWith("year:")) return period.slice(5);
+  if (period.startsWith("month:")) return monthLabel(period.slice(6));
+  return "";
+}
+
+// --- main render ---
+function renderAll() {
+  const items = liveItems();
+  const rows = filterByPeriod(items);
+
+  const autosave = serverReachable ? " · autospar till disk aktivt" : "";
+  const shown = new Set(rows.map(r => r.r)).size;
+  const ofTotal = shown === RAW.receipts_count ? "" : ` av ${RAW.receipts_count}`;
+  document.getElementById("subtitle").textContent =
+    `${shown}${ofTotal} kvitton · visar ${periodLabel()}${autosave}`;
+
+  renderStats(rows);
+  renderBar(rows);
+  renderPie(rows);
+  renderCatList(rows);
+}
+
+periodSelect.addEventListener("change", renderAll);
+updateOverridesBar();
+renderAll();
+renderSyncRow();
+initFromServer();
+</script>
+</body>
+</html>

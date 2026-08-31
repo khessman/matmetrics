@@ -1,0 +1,32 @@
+# Main dashboard binary. kvitto-core/kvitto-ica/kvitto-willys are git
+# submodules under crates/ — each independently updatable/versioned in its
+# own repo; this workspace just checks out a pinned commit of each.
+
+[workspace]
+members = ["crates/kvitto-core", "crates/kvitto-ica", "crates/kvitto-willys"]
+
+[package]
+name = "kvittokartan"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "kvittokartan"
+path = "src/main.rs"
+
+[dependencies]
+kvitto-core   = { path = "crates/kvitto-core" }
+kvitto-ica    = { path = "crates/kvitto-ica" }
+kvitto-willys = { path = "crates/kvitto-willys" }
+
+anyhow = "1"
+axum = "0.7"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+toml = { version = "0.8", features = ["preserve_order"] }
+tower-http = { version = "0.6", features = ["fs"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"

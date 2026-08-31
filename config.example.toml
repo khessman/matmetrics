@@ -1,0 +1,17 @@
+# Kopiera denna fil till config.toml (gitignorad — privat per klon/hushåll).
+# Utan config.toml körs verktyget mot en enda profil "du" (data/du/...).
+#
+# `name` är bara en lokal etikett du hittar på (styr undermappen
+# data/<name>/...) — inget personnummer eller annan identitet behövs här.
+# Både ICA (via Kivra) och Willys BankID-loggar in med ren signatur,
+# personnumret skickas aldrig till någondera.
+#
+# `cargo run -- serve` visar en Uppdatera-knapp per (profil, källa) — en
+# för Willys, en för ICA, snart en för Hemköp — så du kan uppdatera en
+# kedja i taget istället för att vänta igenom alla efter varandra.
+
+[[profile]]
+name = "jag"
+
+[[profile]]
+name = "partner"
