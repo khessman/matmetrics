@@ -110,15 +110,16 @@
 
   .overrides-bar {
     display: none;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     background: var(--panel-2);
     border: 1px solid var(--accent-dim);
-    border-radius: 999px;
-    padding: 8px 16px;
+    border-radius: 14px;
+    padding: 10px 16px;
     margin-bottom: 20px;
     font-size: 0.85rem;
-    width: fit-content;
+    max-width: 100%;
   }
   .overrides-bar.visible { display: flex; }
   .overrides-bar .count { color: var(--accent); font-weight: 600; }
@@ -139,10 +140,14 @@
     padding: 10px 14px;
     font-size: 0.85rem;
   }
-  .sync-tile-row { display: flex; align-items: center; gap: 10px; }
+  .sync-tile-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
   .sync-tile .sync-label { font-weight: 600; }
   .sync-tile .sync-when { color: var(--text-dim); font-size: 0.78rem; }
-  .sync-tile .sync-status { color: var(--accent); font-size: 0.78rem; flex: 1; min-width: 0; }
+  /* flex-basis 100% forces this onto its own line whenever the row wraps
+     (label/when/button already fit one line on most phones) — without it,
+     `flex: 1; min-width: 0` squeezes this into a sliver next to the button
+     and BankID's status text wraps one word per line. */
+  .sync-tile .sync-status { color: var(--accent); font-size: 0.78rem; flex: 1 1 100%; min-width: 0; }
   .sync-tile .sync-status.error { color: var(--danger); }
   .sync-qr {
     display: none;
