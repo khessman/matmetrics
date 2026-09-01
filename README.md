@@ -2,7 +2,7 @@
 
 BankID → kvitton → kategorisering → en lokal HTML-dashboard, med en
 Uppdatera-knapp per (person, kedja) som kör igenom hela flödet direkt från
-vilken enhet som helst som tittar på sidan.
+vilken enhet som helst som tittar på sidan. Just nu: ICA, Willys och Hemköp.
 
 Källorna lever i egna repon, inbundna som git-submoduler:
 
