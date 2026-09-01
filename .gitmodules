@@ -1,9 +1,9 @@
 [submodule "crates/kvitto-core"]
 	path = crates/kvitto-core
-	url = ../kvitto-core
+	url = https://github.com/khessman/kvitto-core.git
 [submodule "crates/kvitto-ica"]
 	path = crates/kvitto-ica
-	url = ../kvitto-ica
+	url = https://github.com/khessman/kvitto-ica.git
 [submodule "crates/kvitto-willys"]
 	path = crates/kvitto-willys
-	url = ../kvitto-willys
+	url = https://github.com/khessman/kvitto-willys.git

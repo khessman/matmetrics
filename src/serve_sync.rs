@@ -42,10 +42,19 @@ impl AppState {
     /// each holds a live HTTP session; `SessionStore` is what's shared, kept
     /// per profile.
     fn sources(&self) -> Result<Vec<Box<dyn ReceiptSource>>> {
-        let mut willys = kvitto_willys::Willys::new(self.sessions.clone())?;
-        willys.return_url = self.base_url.as_ref().map(|b| format!("{b}/report.html"));
-        Ok(vec![Box::new(kvitto_ica::Ica::new(self.sessions.clone())?), Box::new(willys)])
-        // Hemköp joins the vec here once it has a ReceiptSource.
+        let report_url = self.base_url.as_ref().map(|b| format!("{b}/report.html"));
+
+        let mut willys = kvitto_willys::AxfoodSource::new(kvitto_willys::Chain::Willys, self.sessions.clone())?;
+        willys.return_url = report_url.clone();
+
+        let mut hemkop = kvitto_willys::AxfoodSource::new(kvitto_willys::Chain::Hemkop, self.sessions.clone())?;
+        hemkop.return_url = report_url;
+
+        Ok(vec![
+            Box::new(kvitto_ica::Ica::new(self.sessions.clone())?),
+            Box::new(willys),
+            Box::new(hemkop),
+        ])
     }
 }
 
@@ -100,7 +109,27 @@ pub fn start_sync(app: Arc<AppState>, profile: ProfileId, source: SourceId) -> R
     }
     let (job, id) = app.jobs.create(profile.clone(), source);
 
+    // Wrapped so a panic anywhere in the sync (a `todo!()` in a source's
+    // `list`/`fetch`, say) marks the job Failed instead of leaving it frozen
+    // on whatever phase it last reached — a bare `tokio::spawn` swallows a
+    // panicking task's result if nothing ever awaits its `JoinHandle`, which
+    // is exactly what happened before this existed.
+    let job_for_panic = job.clone();
     tokio::spawn(async move {
+        if let Err(e) = tokio::spawn(run_sync(app, profile, source, job)).await {
+            if e.is_panic() {
+                job_for_panic.set(kvitto_core::Phase::Failed {
+                    error: format!("internal error (panic): {e}"),
+                });
+            }
+        }
+    });
+
+    Ok(id)
+}
+
+async fn run_sync(app: Arc<AppState>, profile: ProfileId, source: SourceId, job: Job) {
+    {
         let mut srcs = match app.sources() {
             Ok(s) => s,
             Err(e) => return job.set(kvitto_core::Phase::Failed { error: e.to_string() }),
@@ -140,9 +169,7 @@ pub fn start_sync(app: Arc<AppState>, profile: ProfileId, source: SourceId) -> R
             tracing::warn!("report rebuild failed: {e}");
         }
         job.set(kvitto_core::Phase::Done);
-    });
-
-    Ok(id)
+    }
 }
 
 pub fn poll(app: &AppState, id: u64) -> Option<JobState> {

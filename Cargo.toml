@@ -6,13 +6,13 @@
 members = ["crates/kvitto-core", "crates/kvitto-ica", "crates/kvitto-willys"]
 
 [package]
-name = "kvittokartan"
+name = "matmetrics"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
 [[bin]]
-name = "kvittokartan"
+name = "matmetrics"
 path = "src/main.rs"
 
 [dependencies]

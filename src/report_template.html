@@ -94,6 +94,20 @@
     letter-spacing: 0.05em; margin-top: 4px;
   }
 
+  .search-row { margin-bottom: 20px; }
+  .search-row input {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 9px 16px;
+    font-size: 0.9rem;
+    color: inherit;
+    font-family: inherit;
+  }
+  .search-row input:focus { outline: none; border-color: var(--accent-dim); }
+
   .overrides-bar {
     display: none;
     align-items: center;
@@ -217,6 +231,20 @@
   .item-row .iamount { width: 90px; text-align: right; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
   .item-row select { padding: 4px 8px; font-size: 0.76rem; width: 148px; }
   .item-row select.changed { border-color: var(--accent); color: var(--accent); }
+  .source-badge {
+    display: inline-block;
+    font-size: 0.62rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    vertical-align: middle;
+  }
+  .source-badge.source-willys { border-color: #c97a3d; color: #e0a24f; }
+  .source-badge.source-hemköp { border-color: #4fa06b; color: #7ecb96; }
+  .source-badge.source-ica { border-color: #3d8ec9; color: #6fb8e8; }
 </style>
 </head>
 <body>
@@ -227,8 +255,12 @@
     </div>
   </div>
 
-  <h1>ICA — inköpsstatistik</h1>
+  <h1>Kvittokartan — inköpsstatistik</h1>
   <p class="subtitle" id="subtitle"></p>
+
+  <div class="search-row">
+    <input type="text" id="search-input" placeholder="Sök en vara, t.ex. mjölk..." autocomplete="off">
+  </div>
 
   <div class="overrides-bar" id="overrides-bar">
     <span><span class="count" id="overrides-count">0</span> omkategoriserade varor sparade lokalt</span>
@@ -340,11 +372,24 @@ function renderQr(qrBox, qrText) {
   qrBox.classList.add("visible");
 }
 
+// Rendera autostart-länken varje poll, inte bara en gång — jobbet börjar i
+// "idle" och hinner svara på själva start-anropet innan BankID-ordern ens
+// finns (till skillnad från den gamla ica-sync-servern, som väntade in
+// hela auth::begin() innan den svarade), så länken dyker först upp här.
+function renderAutostart(qrBox, link) {
+  qrBox.innerHTML = `<p><a class="autostart-link" href="${link}">↳ Öppna BankID-appen</a></p>`;
+  qrBox.classList.add("visible");
+}
+
 function handleSyncStatus(data, statusEl, btn, qrBox) {
   statusEl.classList.remove("error");
   if (data.status === "authenticating") {
     statusEl.textContent = data.hint || "Väntar på BankID...";
-    if (data.qr_code) renderQr(qrBox, data.qr_code);
+    if (data.qr_code) {
+      renderQr(qrBox, data.qr_code);
+    } else if (data.autostart_link) {
+      renderAutostart(qrBox, data.autostart_link);
+    }
   } else if (data.status === "working") {
     statusEl.textContent = "Synkar kvitton...";
     qrBox.classList.remove("visible");
@@ -380,17 +425,21 @@ async function startSync(profile, source, btn, statusEl, qrBox) {
     const data = await res.json();
     handleSyncStatus(data, statusEl, btn, qrBox);
 
-    // Funkar bara om enheten som klickade har BankID installerat — annars
-    // är QR-koden i qrBox vägen in (skanna med en annan enhet).
-    if (data.status === "authenticating" && data.autostart_link) {
-      window.location.href = data.autostart_link;
-    }
-
     if (syncPollers.has(key)) clearInterval(syncPollers.get(key));
+    let autoStarted = false;
     const poll = setInterval(async () => {
       const r = await fetch(`/api/sync/status/${encodeURIComponent(profile)}/${encodeURIComponent(source)}`, { cache: "no-store" });
       const d = await r.json();
       handleSyncStatus(d, statusEl, btn, qrBox);
+
+      // Öppna BankID-appen automatiskt första gången länken dyker upp —
+      // funkar bara om enheten som klickade har appen installerad. Bara
+      // en gång: annars kapar vi navigeringen varje pollning.
+      if (!autoStarted && d.status === "authenticating" && d.autostart_link) {
+        autoStarted = true;
+        window.location.href = d.autostart_link;
+      }
+
       if (d.status === "done") {
         clearInterval(poll);
         syncPollers.delete(key);
@@ -651,22 +700,27 @@ const overlay = document.getElementById("overlay");
 const drawerTitle = document.getElementById("drawer-title");
 const drawerBody = document.getElementById("drawer-body");
 
-function openDrawer(category) {
-  const rows = filterByPeriod(liveItems()).filter(r => r.category === category);
-
-  // Gruppera per override-nyckel (kedjeprefixad — samma varunamn från olika
-  // kedjor är medvetet SKILDA rader här, se kvitto-core::categorize::override_key)
+// Gruppera per override-nyckel (kedjeprefixad — samma varunamn från olika
+// kedjor är medvetet SKILDA rader här, se kvitto-core::categorize::override_key)
+// och rendera in i draw­ern. Delad av kategori-drilldown och sökresultat;
+// `reopen` beskriver hur vyn ska byggas om efter en omkategorisering (de
+// två vyerna filtrerar olika, så det går inte att bara komma ihåg en kategori).
+function renderDrawer(rows, titleText, reopen) {
   const byKey = new Map();
   for (const r of rows) {
-    const e = byKey.get(r.key) || { name: r.name, count: 0, total: 0 };
+    const e = byKey.get(r.key) || { name: r.name, source: r.source, category: r.category, count: 0, total: 0 };
     e.count += 1;
     e.total += r.amount;
     byKey.set(r.key, e);
   }
   const grouped = [...byKey.entries()].sort((a, b) => b[1].total - a[1].total);
 
-  drawerTitle.textContent = `${category} · ${grouped.length} varor · ${fmtKr(rows.reduce((s, r) => s + r.amount, 0))}`;
+  drawerTitle.textContent = titleText;
   drawerBody.innerHTML = "";
+
+  if (grouped.length === 0) {
+    drawerBody.innerHTML = '<p class="hint">Inga träffar.</p>';
+  }
 
   for (const [key, info] of grouped) {
     const row = document.createElement("div");
@@ -677,7 +731,7 @@ function openDrawer(category) {
       const opt = document.createElement("option");
       opt.value = c;
       opt.textContent = c;
-      if (c === category) opt.selected = true;
+      if (c === info.category) opt.selected = true;
       select.appendChild(opt);
     }
     if (overrides.has(key)) select.classList.add("changed");
@@ -689,10 +743,10 @@ function openDrawer(category) {
       select.classList.add("changed");
       updateOverridesBar();
       renderAll();
-      openDrawer(category); // re-render listan (varan flyttar snart ut ur denna kategori nästa render)
+      reopen(); // re-render listan (varan flyttar snart ut ur denna vy nästa render)
     });
 
-    row.innerHTML = `<div class="iname">${info.name}</div><div class="icount">${info.count}x</div><div class="iamount">${fmtKr(info.total)}</div>`;
+    row.innerHTML = `<div class="iname">${info.name} <span class="source-badge source-${info.source.toLowerCase()}">${info.source}</span></div><div class="icount">${info.count}x</div><div class="iamount">${fmtKr(info.total)}</div>`;
     row.appendChild(select);
     drawerBody.appendChild(row);
   }
@@ -700,8 +754,36 @@ function openDrawer(category) {
   overlay.classList.add("visible");
 }
 
+function openDrawer(category) {
+  const rows = filterByPeriod(liveItems()).filter(r => r.category === category);
+  const title = `${category} · ${rows.length ? new Set(rows.map(r => r.key)).size : 0} varor · ${fmtKr(rows.reduce((s, r) => s + r.amount, 0))}`;
+  renderDrawer(rows, title, () => openDrawer(category));
+}
+
+function openSearch(query) {
+  const q = query.trim().toLowerCase();
+  const rows = q ? filterByPeriod(liveItems()).filter(r => r.name.toLowerCase().includes(q)) : [];
+  const title = q
+    ? `"${query.trim()}" · ${new Set(rows.map(r => r.key)).size} varor · ${fmtKr(rows.reduce((s, r) => s + r.amount, 0))}`
+    : "Sök en vara ovan";
+  renderDrawer(rows, title, () => openSearch(query));
+}
+
 document.getElementById("drawer-close").addEventListener("click", () => overlay.classList.remove("visible"));
 overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.remove("visible"); });
+
+const searchInput = document.getElementById("search-input");
+let searchDebounce = null;
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchDebounce);
+  const q = searchInput.value;
+  searchDebounce = setTimeout(() => {
+    if (q.trim()) openSearch(q);
+  }, 200);
+});
+searchInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && searchInput.value.trim()) openSearch(searchInput.value);
+});
 
 // --- overrides toolbar ---
 function updateOverridesBar() {

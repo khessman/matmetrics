@@ -183,7 +183,7 @@ enum SyncStatusView {
 }
 
 fn source_id(name: &str) -> Option<SourceId> {
-    [kvitto_core::WILLYS, kvitto_core::ICA].into_iter().find(|s| s.0 == name)
+    [kvitto_core::WILLYS, kvitto_core::HEMKOP, kvitto_core::ICA].into_iter().find(|s| s.0 == name)
 }
 
 fn view_of(state: Option<kvitto_core::JobState>) -> SyncStatusView {

@@ -17,6 +17,10 @@ struct ItemRow {
     name: String,
     category: String,
     key: String,
+    /// Display label for which chain this line came from ("Willys"/"ICA") —
+    /// added because with two chains synced into one list, "vad kom
+    /// varifrån" stopped being obvious from the item name alone.
+    source: String,
     amount: f64,
     month: String,
     #[serde(rename = "r")]
@@ -41,11 +45,20 @@ struct ReportData {
     syncs: Vec<SyncInfo>,
 }
 
-/// Sources shown as sync buttons, whether or not they're wired up yet —
-/// Hemköp shows disabled ("kommer snart") until it has a `ReceiptSource`.
-const SOURCE_ROWS: &[(SourceId, &str, bool)] =
-    &[(kvitto_core::WILLYS, "Willys", true), (kvitto_core::ICA, "ICA", true)];
-// Hemköp added here once it exists: (HEMKOP, "Hemköp", true).
+/// Sources shown as sync buttons.
+const SOURCE_ROWS: &[(SourceId, &str, bool)] = &[
+    (kvitto_core::WILLYS, "Willys", true),
+    (kvitto_core::HEMKOP, "Hemköp", true),
+    (kvitto_core::ICA, "ICA", true),
+];
+
+fn source_label(chain: &str) -> String {
+    SOURCE_ROWS
+        .iter()
+        .find(|(id, _, _)| id.0 == chain)
+        .map(|(_, label, _)| label.to_string())
+        .unwrap_or_else(|| chain.to_string())
+}
 
 fn build_report_data(store: &FsStore, profiles: &[ProfileId], data_root: &str) -> anyhow::Result<ReportData> {
     let receipts = store.merged(profiles)?;
@@ -59,6 +72,7 @@ fn build_report_data(store: &FsStore, profiles: &[ProfileId], data_root: &str) -
                 name: line.description.clone(),
                 category: line.category.clone().unwrap_or_else(|| "Okategoriserat".to_string()),
                 key: override_key(chain, line),
+                source: source_label(chain),
                 amount: line.amount.kr(),
                 month: month.clone(),
                 receipt: i,
