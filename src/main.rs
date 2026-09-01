@@ -19,7 +19,7 @@ const CATEGORIES_PATH: &str = "data/categories.toml";
 const CONFIG_PATH: &str = "config.toml";
 
 #[derive(Parser)]
-#[command(name = "kvittokartan")]
+#[command(name = "matmetrics")]
 struct Cli {
     #[command(subcommand)]
     command: Command,

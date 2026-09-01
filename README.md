@@ -1,4 +1,4 @@
-# kvittokartan
+# matmetrics
 
 BankID → kvitton → kategorisering → en lokal HTML-dashboard, med en
 Uppdatera-knapp per (person, kedja) som kör igenom hela flödet direkt från
@@ -8,8 +8,7 @@ Källorna lever i egna repon, inbundna som git-submoduler:
 
 - [`kvitto-core`](../kvitto-core) — delad modell, lagring, kategorisering, jobbmotorn bakom Uppdatera-knappen. Kedjeagnostisk.
 - [`kvitto-ica`](../kvitto-ica) — ICA-kvitton via Kivra (BankID OAuth2/PKCE).
-- [`kvitto-willys`](../kvitto-willys) — Willys-kvitton via BankID (se den crate:ns egen README för varför en bakgrundswebbläsare behövs där, men inte här).
-- Hemköp: inte implementerad än.
+- [`kvitto-willys`](../kvitto-willys) — Willys- och Hemköp-kvitton via BankID (samma Axfood/Hybris-backend bakom båda domänerna — en riktig, synlig bakgrundswebbläsare krävs för `collect-login`, se crate:ns källkodskommentarer för varför).
 
 ## Kom igång
 
